@@ -1,14 +1,7 @@
-enum State {
-  NeedToHarvestMore,
-  LookingForDepositing
-}
+import { requireCreepByName } from "./utils";
 
-class HarvesterMachine {
-  private state: State;
-  private creep: Creep;
-
+export class HarvesterMachine {
   public constructor(creep: Creep) {
-    this.state = State.NeedToHarvestMore;
-    this.creep = creep;
+    creep.attack(creep);
   }
 }

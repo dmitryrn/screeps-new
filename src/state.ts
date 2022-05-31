@@ -1,6 +1,8 @@
 import { battleStats, canForSureWin, chessGetNextLocation, creepPrice } from "./utils";
 import { NoEnergySourceFound } from "./says";
 
+export type RoleConstant = "Harvester";
+
 export enum TaskType {
   MoveTo,
   SpawnCreep,

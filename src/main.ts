@@ -1,5 +1,5 @@
 import { ErrorMapper } from "utils/ErrorMapper";
-import { TaskType, machine } from "./state";
+import { RoleConstant, TaskType, machine } from "./state";
 import {
   getUniqueCreepName,
   notifyOk,
@@ -29,9 +29,9 @@ declare global {
   }
 
   interface CreepMemory {
-    role: string;
-    room: string;
-    controllerUpgradeMovesToController?: boolean;
+    role: RoleConstant;
+
+    harvesterReadyToDeposit?: boolean;
   }
 
   // Syntax for adding proprties to `global` (ex "global.log")
