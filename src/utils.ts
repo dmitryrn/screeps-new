@@ -22,25 +22,29 @@ export function requireHarvestTask(task: Task): Required<Pick<Task, "CreepName" 
   };
 }
 
-export function requireMoveToTask(task: Task): Required<Pick<Task, "Target" | "CreepName">> {
+export function requireMoveToTask(task: Task): Required<Pick<Task, "Pos" | "CreepName" | "RoomName">> {
   if (task.CreepName === undefined) throw Error("CreepName not found in task");
-  if (task.Target === undefined) throw Error("Target not found in task");
+  if (task.Pos === undefined) throw Error("Target not found in task");
+  if (task.RoomName === undefined) throw Error("RoomName not found in task");
   return {
     ...task,
     CreepName: task.CreepName,
-    Target: task.Target
+    Pos: task.Pos,
+    RoomName: task.RoomName
   };
 }
 
-export function requireTransferTask(task: Task): Required<Pick<Task, "Resource" | "TransferTarget" | "CreepName">> {
+export function requireTransferTask(task: Task): Required<Pick<Task, "Resource" | "Pos" | "CreepName" | "RoomName">> {
   if (task.CreepName === undefined) throw Error("CreepName not found in task");
-  if (task.TransferTarget === undefined) throw Error("TransferTarget not found in task");
+  if (task.Pos === undefined) throw Error("Pos not found in task");
   if (task.Resource === undefined) throw Error("Resource not found in task");
+  if (task.RoomName === undefined) throw Error("RoomName not found in task");
   return {
     ...task,
     CreepName: task.CreepName,
     Resource: task.Resource,
-    TransferTarget: task.TransferTarget
+    Pos: task.Pos,
+    RoomName: task.RoomName
   };
 }
 
