@@ -1,11 +1,18 @@
-import { Task, TaskType } from "./state";
-import { NoEnergySourceFound } from "./says";
+import { TaskType } from "./state";
+import { Executor } from "./executor";
+import { isInRangeOfEnemy } from "./logic";
 
 const ErrCreepControllerUndefined = Error("creep controller undefined");
 const ErrCreepCantFindEnergySource = Error("creep can't find energy source");
 
 export class Harvester {
-  public constructor(private creep: Creep, private shouldBeUpgradingController: boolean) {
+  public constructor(
+    private creep: Creep,
+    private executor: Executor,
+    private shouldBeUpgradingController: boolean,
+    private markObject: (id: string, creepId: string) => void,
+    private whoMarkedObject: (id: string) => string | undefined
+  ) {
     if (creep.memory.harvesterReadyToDeposit === undefined) {
       creep.memory.harvesterReadyToDeposit = false;
     }
@@ -20,16 +27,20 @@ export class Harvester {
     const closestSitePos = this.creep.pos.findClosestByPath(FIND_MY_CONSTRUCTION_SITES)?.pos;
     if (closestSitePos) toSearch.push(closestSitePos);
 
-    const closestExtensionPos = this.creep.pos.findClosestByPath(FIND_MY_STRUCTURES, {
+    const closestContainersPos = this.creep.pos.findClosestByPath(FIND_MY_STRUCTURES, {
       filter: object => {
-        if (object.structureType !== "extension") return false;
-        return object.store.getFreeCapacity("energy") > 0;
+        if (object.structureType === "extension" || object.structureType === "spawn") {
+          if (object.store.getFreeCapacity("energy") > 0) {
+            return true;
+          }
+        }
+        return false;
       }
     })?.pos;
-    if (closestExtensionPos) toSearch.push(closestExtensionPos);
+    if (closestContainersPos) toSearch.push(closestContainersPos);
 
     if (toSearch.length > 1) {
-      if (closestExtensionPos!.getRangeTo(closestSitePos!) <= 5) return closestExtensionPos!;
+      if (closestContainersPos!.getRangeTo(closestSitePos!) <= 5) return closestContainersPos!;
     }
 
     const closestPos = this.creep.pos.findClosestByPath(toSearch);
@@ -38,13 +49,51 @@ export class Harvester {
     return this.getController().pos;
   }
 
+  private findNearestSource(): Tombstone | Source | Resource | null {
+    const droppedEnergy = this.creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+      filter: o => o.resourceType === "energy"
+    });
+    if (
+      droppedEnergy &&
+      (this.whoMarkedObject(droppedEnergy.id) === this.creep.id ||
+        this.whoMarkedObject(droppedEnergy.id) === undefined) &&
+      !isInRangeOfEnemy(droppedEnergy.pos)
+    ) {
+      console.log("!!!!!!!found dropped energy");
+      this.markObject(droppedEnergy.id, this.creep.id);
+      return droppedEnergy;
+    }
+
+    const closestTombstone = this.creep.pos.findClosestByPath(FIND_TOMBSTONES, {
+      filter: o => o.store.energy > 0
+    });
+    if (
+      closestTombstone &&
+      (this.whoMarkedObject(closestTombstone.id) === this.creep.id ||
+        this.whoMarkedObject(closestTombstone.id) === undefined) &&
+      !isInRangeOfEnemy(closestTombstone.pos)
+    ) {
+      console.log("!!!!!!!!!!found tombstone");
+      this.markObject(closestTombstone.id, this.creep.id);
+      return closestTombstone;
+    }
+
+    const nearestEnergySource = this.creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+    if (nearestEnergySource && !isInRangeOfEnemy(nearestEnergySource.pos)) {
+      return nearestEnergySource;
+    }
+
+    console.log(ErrCreepCantFindEnergySource);
+    return null;
+  }
+
   private getController() {
     const { controller } = this.creep.room;
     if (!controller) throw ErrCreepControllerUndefined;
     return controller;
   }
 
-  public produceTask(): Task | null {
+  public perform(): undefined {
     if (this.creep.store.getFreeCapacity() === this.creep.store.getCapacity()) {
       this.creep.memory.harvesterReadyToDeposit = false;
     }
@@ -58,43 +107,61 @@ export class Harvester {
 
       const isNearEntity = this.creep.pos.isNearTo(nearestEntityToDepositTo);
       if (isNearEntity) {
-        return {
+        this.executor.execute({
           Type: TaskType.Transfer,
           Resource: RESOURCE_ENERGY,
           Pos: [nearestEntityToDepositTo.x, nearestEntityToDepositTo.y],
           CreepName: this.creep.name,
           RoomName: this.creep.room.name
-        };
+        });
+        return;
       } else {
-        return {
+        this.executor.execute({
           Type: TaskType.MoveTo,
           Pos: [nearestEntityToDepositTo.x, nearestEntityToDepositTo.y],
           RoomName: this.creep.room.name,
           CreepName: this.creep.name
-        };
+        });
+        return;
       }
     } else {
-      const nearestEnergySource = this.creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+      const nearestEnergySource = this.findNearestSource();
       if (!nearestEnergySource) {
-        this.creep.say(NoEnergySourceFound);
-        console.log(ErrCreepCantFindEnergySource);
-        return null;
+        return;
       }
 
       const nearEnergySource = this.creep.pos.isNearTo(nearestEnergySource);
       if (nearEnergySource) {
-        return {
-          Type: TaskType.Harvest,
-          HarvestTarget: nearestEnergySource,
-          CreepName: this.creep.name
-        };
+        if ("deathTime" in nearestEnergySource) {
+          this.executor.execute({
+            Type: TaskType.Withdraw,
+            WithdrawTarget: nearestEnergySource,
+            CreepName: this.creep.name,
+            Resource: RESOURCE_ENERGY,
+            RoomName: this.creep.room.name
+          });
+        } else if ("energy" in nearestEnergySource) {
+          this.executor.execute({
+            Type: TaskType.Harvest,
+            HarvestTarget: nearestEnergySource,
+            CreepName: this.creep.name
+          });
+        } else {
+          this.executor.execute({
+            Type: TaskType.Pickup,
+            ResourceObject: nearestEnergySource,
+            CreepName: this.creep.name
+          });
+        }
+        return;
       } else {
-        return {
+        this.executor.execute({
           Type: TaskType.MoveTo,
           Pos: [nearestEnergySource.pos.x, nearestEnergySource.pos.y],
           RoomName: this.creep.room.name,
           CreepName: this.creep.name
-        };
+        });
+        return;
       }
     }
   }

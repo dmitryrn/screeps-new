@@ -27,12 +27,14 @@ export function shouldSpawnMoreHarvesters(room: Room): boolean {
   const extensions = room.find(FIND_MY_STRUCTURES, {
     filter: object => object.structureType === STRUCTURE_EXTENSION
   });
-  if (extensions.length >= 4) return harvesters.length < 8;
+  if (extensions.length >= 5) {
+    return harvesters.length < 8;
+  }
 
   return harvesters.length < 4;
 }
 
-export function spawnHarvester(room: Room) {
+export function spawnHarvester(room: Room): undefined {
   const spawns = room.find(FIND_MY_SPAWNS);
   if (!spawns[0]) {
     throw Error("can't find a spawn in room");
@@ -41,11 +43,43 @@ export function spawnHarvester(room: Room) {
     console.log("spawning");
     return;
   }
-  return spawns[0].spawnCreep([MOVE, MOVE, WORK, CARRY], getUniqueCreepName(Object.values(Game.creeps)), {
+
+  const maxMoney = 5 * 50 + 300;
+
+  let moveParts = 2;
+  let workParts = 1;
+  let carryParts = 1;
+  let cost;
+  while (true) {
+    const intermediateCost =
+      (moveParts + 2) * BODYPART_COST[MOVE] +
+      (workParts + 1) * BODYPART_COST[WORK] +
+      (carryParts + 1) * BODYPART_COST[CARRY];
+    if (intermediateCost <= maxMoney) {
+      moveParts += 2;
+      workParts += 1;
+      carryParts += 1;
+      cost = intermediateCost;
+      continue;
+    }
+    break;
+  }
+
+  const bodyParts = [
+    ...Array.from({ length: moveParts }).map(() => MOVE),
+    ...Array.from({ length: workParts }).map(() => WORK),
+    ...Array.from({ length: carryParts }).map(() => CARRY)
+  ];
+
+  const code = spawns[0].spawnCreep(bodyParts, getUniqueCreepName(Object.values(Game.creeps)), {
     memory: {
       role: ROLE_HARVESTER
     }
   });
+  if (code !== OK) {
+    console.log(`error spawning creep (${bodyParts}, cost: ${cost}): ${code}`);
+  }
+  return;
 }
 
 const levelToExtensions: { [k: number]: number } = {
@@ -115,4 +149,23 @@ export function shouldBeUpgradingController(room: Room) {
   if (room.controller.ticksToDowngrade <= 1000 || Memory.shouldBeUpgradingController) {
     Memory.shouldBeUpgradingController = true;
   }
+}
+
+export function isInRangeOfEnemy(pos: RoomPosition): boolean {
+  const room = Game.rooms[pos.roomName];
+  if (!room) {
+    throw Error('isInRangeOfEnemy: didn"t find room');
+  }
+  const controller = room.controller;
+  if (!controller) {
+    throw Error('isInRangeOfEnemy: didn"t find controller');
+  }
+
+  const res = room.lookForAtArea(LOOK_CREEPS, pos.x - 3, pos.y - 3, pos.x + 3, pos.y + 3, true);
+  for (const re of res) {
+    if (re.creep.owner !== controller.owner) {
+      return re.creep.getActiveBodyparts(RANGED_ATTACK) > 0;
+    }
+  }
+  return false;
 }

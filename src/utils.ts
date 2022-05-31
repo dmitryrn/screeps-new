@@ -22,6 +22,32 @@ export function requireHarvestTask(task: Task): Required<Pick<Task, "CreepName" 
   };
 }
 
+export function requireWithdrawTask(
+  task: Task
+): Required<Pick<Task, "CreepName" | "RoomName" | "WithdrawTarget" | "Resource">> {
+  if (task.CreepName === undefined) throw Error("CreepName not found in task");
+  if (task.RoomName === undefined) throw Error("RoomName not found in task");
+  if (task.WithdrawTarget === undefined) throw Error("WithdrawTarget not found in task");
+  if (task.Resource === undefined) throw Error("Resource not found in task");
+  return {
+    ...task,
+    CreepName: task.CreepName,
+    RoomName: task.RoomName,
+    WithdrawTarget: task.WithdrawTarget,
+    Resource: task.Resource
+  };
+}
+
+export function requirePickupTask(task: Task): Required<Pick<Task, "CreepName" | "ResourceObject">> {
+  if (task.CreepName === undefined) throw Error("CreepName not found in task");
+  if (task.ResourceObject === undefined) throw Error("ResourceObject not found in task");
+  return {
+    ...task,
+    CreepName: task.CreepName,
+    ResourceObject: task.ResourceObject
+  };
+}
+
 export function requireMoveToTask(task: Task): Required<Pick<Task, "Pos" | "CreepName" | "RoomName">> {
   if (task.CreepName === undefined) throw Error("CreepName not found in task");
   if (task.Pos === undefined) throw Error("Target not found in task");

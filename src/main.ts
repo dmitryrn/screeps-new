@@ -1,16 +1,5 @@
 import { ErrorMapper } from "utils/ErrorMapper";
 import { ROLE_HARVESTER, RoleConstant, Task, TaskType } from "./state";
-import {
-  getUniqueCreepName,
-  notifyOk,
-  requireCreateConstructionSiteTask,
-  requireCreepByName,
-  requireHarvestTask,
-  requireMoveToTask,
-  requireOk,
-  requireRoomByName,
-  requireTransferTask
-} from "./utils";
 import { placeExtensions, shouldBeUpgradingController, shouldSpawnMoreHarvesters, spawnHarvester } from "./logic";
 import { Harvester } from "./harvester-creep";
 import { Executor } from "./executor";
@@ -28,6 +17,8 @@ declare global {
   // Memory extension samples
   interface Memory {
     shouldBeUpgradingController: boolean;
+
+    markedObjects: { [k: string]: string };
   }
 
   interface CreepMemory {
@@ -56,7 +47,31 @@ export const loop = ErrorMapper.wrapLoop(() => {
     }
   }
 
-  const tasks: Task[] = [];
+  if (!Memory.markedObjects) Memory.markedObjects = {};
+  for (const [k, v] of Object.entries(Memory.markedObjects)) {
+    if (typeof v !== "string") {
+      delete Memory.markedObjects[k];
+    }
+  }
+  if (Game.time % 10 === 0) {
+    for (const id of Object.keys(Memory.markedObjects)) {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      if (!Game.getObjectById(id)) {
+        delete Memory.markedObjects[id];
+      }
+    }
+  }
+  if (Game.time % 100 === 0) {
+    Memory.markedObjects = {};
+  }
+
+  function markObject(id: string, creepId: string) {
+    Memory.markedObjects[id.toString()] = creepId.toString();
+  }
+  function whoMarkedObject(id: string): string | undefined {
+    return Memory.markedObjects[id.toString()];
+  }
 
   const rooms = Object.values(Game.rooms);
   if (rooms.length !== 1) {
@@ -74,88 +89,14 @@ export const loop = ErrorMapper.wrapLoop(() => {
     spawnHarvester(room);
   }
 
+  const executor = new Executor(spawn);
+
   for (const creep of Object.values(Game.creeps)) {
     if (creep.memory.role === ROLE_HARVESTER) {
-      const harvester = new Harvester(creep, Memory.shouldBeUpgradingController);
-      const task = harvester.produceTask();
-      if (task) {
-        tasks.push(task);
-      }
+      const harvester = new Harvester(creep, executor, Memory.shouldBeUpgradingController, markObject, whoMarkedObject);
+      harvester.perform();
     }
   }
-
-  const executor = new Executor();
 
   placeExtensions(room, spawn, executor);
-
-  for (const task of tasks) {
-    console.log(TaskType[task.Type]);
-    switch (task.Type) {
-      case TaskType.SpawnCreep: {
-        if (!task.SpawnName) throw Error("no spawn name");
-        const spawnLocal = Game.spawns[task.SpawnName];
-        if (!spawnLocal) throw Error("no spawn found");
-        if (!task.BodyParts) throw Error("no body parts");
-        notifyOk(spawnLocal.spawnCreep(task.BodyParts, getUniqueCreepName(Object.values(Game.creeps))));
-        break;
-      }
-      case TaskType.Harvest: {
-        const t = requireHarvestTask(task);
-        const creep = requireCreepByName(t.CreepName);
-        notifyOk(creep.harvest(t.HarvestTarget));
-        break;
-      }
-      case TaskType.MoveTo: {
-        const t = requireMoveToTask(task);
-        const creep = requireCreepByName(t.CreepName);
-        notifyOk(creep.moveTo(new RoomPosition(t.Pos[0], t.Pos[1], t.RoomName)));
-        break;
-      }
-      case TaskType.Transfer: {
-        const t = requireTransferTask(task);
-        const creep = requireCreepByName(t.CreepName);
-        const pos = new RoomPosition(t.Pos[0], t.Pos[1], t.RoomName);
-        const res = pos.look();
-        let str: Structure | ConstructionSite | StructureController | undefined;
-        for (const re of res) {
-          if (re.type === "creep") {
-            throw Error("got creep in transfer task");
-          }
-          if (re.type === "structure") {
-            str = re.structure;
-            break;
-          }
-          if (re.type === "constructionSite") {
-            str = re.constructionSite;
-            break;
-          }
-        }
-        if (!str) throw Error("didn't find structure in transfer task");
-        try {
-          if ("progress" in str && !("ticksToDowngrade" in str)) {
-            requireOk(creep.build(str));
-          } else {
-            requireOk(creep.transfer(str, t.Resource));
-          }
-        } catch (e) {
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-ignore
-          throw Error(
-            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-            `error processing transfer task (pos: ${t.Pos}, type: ${
-              "progress" in str ? "constructionSite" : "structure"
-              // eslint-disable-next-line @typescript-eslint/restrict-template-expressions,@typescript-eslint/no-unsafe-member-access
-            }): ${(e as any).message}`
-          );
-        }
-        break;
-      }
-      case TaskType.CreateConstructionSite: {
-        const t = requireCreateConstructionSiteTask(task);
-        const roomLocal = requireRoomByName(t.RoomName);
-        notifyOk(roomLocal.createConstructionSite(t.Pos[0], t.Pos[1], t.StructureType));
-        break;
-      }
-    }
-  }
 });

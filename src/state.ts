@@ -9,7 +9,9 @@ export enum TaskType {
   SpawnCreep,
   Transfer,
   Harvest,
-  CreateConstructionSite
+  CreateConstructionSite,
+  Withdraw,
+  Pickup
 }
 
 export interface Task {
@@ -24,6 +26,8 @@ export interface Task {
   CreepName?: string;
   StructureType?: BuildableStructureConstant;
   RoomName?: string;
+  WithdrawTarget?: Structure | Tombstone | Ruin;
+  ResourceObject?: Resource;
 }
 
 // interface State {
