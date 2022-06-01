@@ -156,6 +156,14 @@ export class RoomMining {
   public constructor(private room: Room, private spawn: StructureSpawn, private creeps: Creep[]) {}
 
   public process() {
+    const extensions = this.room.find(FIND_MY_STRUCTURES, {
+      filter: object => object.structureType === STRUCTURE_EXTENSION
+    });
+    if (extensions.length < 5) {
+      console.log(`not doing mining cuz extensions < 5`);
+      return;
+    }
+
     const res = this.room.find(FIND_SOURCES);
 
     for (const source of res) {
@@ -252,6 +260,8 @@ export class RoomMining {
     if (isFull || creep.memory.minerReadyToDeposit) {
       creep.memory.minerReadyToDeposit = true;
 
+      // creep.harvest(source); // trying to enqueue action to do in one tick
+
       const c = creep.transfer(container, RESOURCE_ENERGY);
       if (c === ERR_NOT_IN_RANGE) {
         creep.moveTo(container);
@@ -261,6 +271,8 @@ export class RoomMining {
         return;
       }
     } else {
+      // creep.transfer(container, RESOURCE_ENERGY); // trying to enqueue action to do in one tick
+
       const c = creep.harvest(source);
       if (c === ERR_NOT_IN_RANGE) {
         creep.moveTo(source);

@@ -31,8 +31,9 @@ export function shouldSpawnMoreHarvesters(room: Room, mines: Mine[]): boolean {
     if (m.getAliveMiners() < m.getPossibleSimultaniousMiners()) continue;
     readyMines++;
   }
+  const additional = 1 * readyMines;
 
-  return harvesters.length < 8 + 4 * readyMines;
+  return harvesters.length < 8 + additional;
 }
 
 export function spawnHarvester(room: Room, spawn: StructureSpawn): undefined {

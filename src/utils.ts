@@ -1,3 +1,5 @@
+import { RoleConstant } from "./main";
+
 export function requireCreepByName(name: string): Creep {
   const c = Game.creeps[name];
   if (!c) throw Error(`creep not found, name: ${name}`);
@@ -10,7 +12,7 @@ export function requireRoomByName(name: string): Room {
   return c;
 }
 
-export function getUniqueCreepName(creeps: Creep[]): string {
+export function getUniqueCreepName(creeps: Creep[], role?: RoleConstant): string {
   let c = 0;
   const m = new Set<string>();
   for (const creep of creeps) {
@@ -19,10 +21,15 @@ export function getUniqueCreepName(creeps: Creep[]): string {
   let debugC = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    if (m.has(c.toString(10))) {
+    let name = c.toString(10);
+    if (role) {
+      name = role + "-" + name;
+    }
+
+    if (m.has(name)) {
       c++;
     } else {
-      return c.toString(10);
+      return name;
     }
 
     if (debugC > 10000) {

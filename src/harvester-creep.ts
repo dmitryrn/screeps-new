@@ -1,5 +1,4 @@
 import { Mine } from "./room-mining";
-import { loop } from "./main";
 
 const ErrCreepControllerUndefined = Error("creep controller undefined");
 
@@ -72,10 +71,9 @@ export class Harvester {
           return;
         }
         // ok
-        if (this.creep.room.name === "E35N17") {
-          if (this.creep.pos.getRangeTo(this.getController()) > 2) {
-            this.creep.moveTo(this.getController());
-          }
+        // this.creep.say(String(this.creep.pos.getRangeTo(this.getController())));
+        if (this.creep.pos.getRangeTo(this.getController()) > 1) {
+          this.creep.moveTo(this.getController());
         }
       };
 
