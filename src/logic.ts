@@ -1,7 +1,9 @@
 import { chessGetNextLocation, getUniqueCreepName } from "./utils";
-import { ROLE_HARVESTER } from "./main";
+import { ROLE_HARVESTER, ROLE_MINER } from "./main";
+import { Mine } from "./room-mining";
+import { read } from "fs";
 
-export function shouldSpawnMoreHarvesters(room: Room): boolean {
+export function shouldSpawnMoreHarvesters(room: Room, mines: Mine[]): boolean {
   const harvesters = room.find(FIND_MY_CREEPS, {
     filter: object => object.memory.role === ROLE_HARVESTER
   });
@@ -23,7 +25,14 @@ export function shouldSpawnMoreHarvesters(room: Room): boolean {
   //   return harvesters.length < 8;
   // }
 
-  return harvesters.length < 8;
+  let readyMines = 0;
+  for (const m of mines) {
+    if (!m.isContainerReady()) continue;
+    if (m.getAliveMiners() < m.getPossibleSimultaniousMiners()) continue;
+    readyMines++;
+  }
+
+  return harvesters.length < 8 + 4 * readyMines;
 }
 
 export function spawnHarvester(room: Room, spawn: StructureSpawn): undefined {
