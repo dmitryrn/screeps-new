@@ -1,13 +1,5 @@
-import { ROLE_HARVESTER, Task, TaskType } from "./state";
-import {
-  chessGetNextLocation,
-  getUniqueCreepName,
-  notifyOk,
-  requireCreateConstructionSiteTask,
-  requireRoomByName
-} from "./utils";
-import { Executor } from "./executor";
-import { max } from "lodash";
+import { chessGetNextLocation, getUniqueCreepName } from "./utils";
+import { ROLE_HARVESTER } from "./main";
 
 export function shouldSpawnMoreHarvesters(room: Room): boolean {
   const harvesters = room.find(FIND_MY_CREEPS, {
@@ -24,60 +16,61 @@ export function shouldSpawnMoreHarvesters(room: Room): boolean {
     return false;
   }
 
-  const extensions = room.find(FIND_MY_STRUCTURES, {
-    filter: object => object.structureType === STRUCTURE_EXTENSION
-  });
-  if (extensions.length >= 5) {
-    return harvesters.length < 8;
-  }
+  // const extensions = room.find(FIND_MY_STRUCTURES, {
+  //   filter: object => object.structureType === STRUCTURE_EXTENSION
+  // });
+  // if (extensions.length >= 5) {
+  //   return harvesters.length < 8;
+  // }
 
-  return harvesters.length < 4;
+  return harvesters.length < 8;
 }
 
-export function spawnHarvester(room: Room): undefined {
-  const spawns = room.find(FIND_MY_SPAWNS);
-  if (!spawns[0]) {
-    throw Error("can't find a spawn in room");
-  }
-  if (spawns[0].spawning) {
+export function spawnHarvester(room: Room, spawn: StructureSpawn): undefined {
+  if (spawn.spawning) {
     console.log("spawning");
     return;
   }
 
-  const maxMoney = 5 * 50 + 300;
+  const extensions = room.find(FIND_MY_STRUCTURES, {
+    filter: object => object.structureType === STRUCTURE_EXTENSION
+  });
 
-  let moveParts = 2;
-  let workParts = 1;
-  let carryParts = 1;
+  const maxMoney = extensions.length * 50 + 300;
+
+  let moveParts = 0;
+  let workParts = 0;
+  let carryParts = 0;
   let cost;
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const intermediateCost =
       (moveParts + 2) * BODYPART_COST[MOVE] +
       (workParts + 1) * BODYPART_COST[WORK] +
       (carryParts + 1) * BODYPART_COST[CARRY];
     if (intermediateCost <= maxMoney) {
+      cost = intermediateCost;
       moveParts += 2;
       workParts += 1;
       carryParts += 1;
-      cost = intermediateCost;
       continue;
     }
     break;
   }
 
   const bodyParts = [
-    ...Array.from({ length: moveParts }).map(() => MOVE),
+    ...Array.from({ length: carryParts }).map(() => CARRY),
     ...Array.from({ length: workParts }).map(() => WORK),
-    ...Array.from({ length: carryParts }).map(() => CARRY)
+    ...Array.from({ length: moveParts }).map(() => MOVE)
   ];
 
-  const code = spawns[0].spawnCreep(bodyParts, getUniqueCreepName(Object.values(Game.creeps)), {
+  const code = spawn.spawnCreep(bodyParts, getUniqueCreepName(Object.values(Game.creeps)), {
     memory: {
       role: ROLE_HARVESTER
     }
   });
   if (code !== OK) {
-    console.log(`error spawning creep (${bodyParts}, cost: ${cost}): ${code}`);
+    // console.log(`error spawning creep (${bodyParts}, cost: ${cost}): ${code}`);
   }
   return;
 }
@@ -93,7 +86,7 @@ const levelToExtensions: { [k: number]: number } = {
   8: 60
 };
 
-export function placeExtensions(room: Room, spawn: StructureSpawn, executor: Executor) {
+export function placeExtensions(room: Room, spawn: StructureSpawn) {
   if (!room.controller) {
     console.log("no controller found");
     return;
@@ -118,6 +111,7 @@ export function placeExtensions(room: Room, spawn: StructureSpawn, executor: Exe
   });
   if (extensionsConstrSites.length > 0) return;
 
+  // eslint-disable-next-line @typescript-eslint/no-shadow
   const [x, y] = chessGetNextLocation([spawn.pos.x, spawn.pos.y], (x, y) => {
     const res = spawn.room.lookAt(x, y);
     for (const re of res) {
@@ -127,12 +121,8 @@ export function placeExtensions(room: Room, spawn: StructureSpawn, executor: Exe
     return false;
   });
 
-  const code = executor.execute({
-    Type: TaskType.CreateConstructionSite,
-    StructureType: STRUCTURE_EXTENSION,
-    Pos: [x, y],
-    RoomName: spawn.room.name
-  });
+  const code = room.createConstructionSite(x, y, STRUCTURE_EXTENSION);
+  // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
   if (code !== OK) console.log(`error placing extension at ${[x, y]}, code: ${code}`);
 }
 
@@ -161,7 +151,7 @@ export function isInRangeOfEnemy(pos: RoomPosition): boolean {
     throw Error('isInRangeOfEnemy: didn"t find controller');
   }
 
-  const res = room.lookForAtArea(LOOK_CREEPS, pos.x - 3, pos.y - 3, pos.x + 3, pos.y + 3, true);
+  const res = room.lookForAtArea(LOOK_CREEPS, pos.y - 5, pos.x - 5, pos.y + 5, pos.x + 5, true);
   for (const re of res) {
     if (re.creep.owner !== controller.owner) {
       return re.creep.getActiveBodyparts(RANGED_ATTACK) > 0;

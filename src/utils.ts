@@ -1,5 +1,3 @@
-import { Task } from "./state";
-
 export function requireCreepByName(name: string): Creep {
   const c = Game.creeps[name];
   if (!c) throw Error(`creep not found, name: ${name}`);
@@ -10,82 +8,6 @@ export function requireRoomByName(name: string): Room {
   const c = Game.rooms[name];
   if (!c) throw Error(`room not found, name: ${name}`);
   return c;
-}
-
-export function requireHarvestTask(task: Task): Required<Pick<Task, "CreepName" | "HarvestTarget">> {
-  if (task.CreepName === undefined) throw Error("CreepName not found in task");
-  if (task.HarvestTarget === undefined) throw Error("HarvestTarget not found in task");
-  return {
-    ...task,
-    CreepName: task.CreepName,
-    HarvestTarget: task.HarvestTarget
-  };
-}
-
-export function requireWithdrawTask(
-  task: Task
-): Required<Pick<Task, "CreepName" | "RoomName" | "WithdrawTarget" | "Resource">> {
-  if (task.CreepName === undefined) throw Error("CreepName not found in task");
-  if (task.RoomName === undefined) throw Error("RoomName not found in task");
-  if (task.WithdrawTarget === undefined) throw Error("WithdrawTarget not found in task");
-  if (task.Resource === undefined) throw Error("Resource not found in task");
-  return {
-    ...task,
-    CreepName: task.CreepName,
-    RoomName: task.RoomName,
-    WithdrawTarget: task.WithdrawTarget,
-    Resource: task.Resource
-  };
-}
-
-export function requirePickupTask(task: Task): Required<Pick<Task, "CreepName" | "ResourceObject">> {
-  if (task.CreepName === undefined) throw Error("CreepName not found in task");
-  if (task.ResourceObject === undefined) throw Error("ResourceObject not found in task");
-  return {
-    ...task,
-    CreepName: task.CreepName,
-    ResourceObject: task.ResourceObject
-  };
-}
-
-export function requireMoveToTask(task: Task): Required<Pick<Task, "Pos" | "CreepName" | "RoomName">> {
-  if (task.CreepName === undefined) throw Error("CreepName not found in task");
-  if (task.Pos === undefined) throw Error("Target not found in task");
-  if (task.RoomName === undefined) throw Error("RoomName not found in task");
-  return {
-    ...task,
-    CreepName: task.CreepName,
-    Pos: task.Pos,
-    RoomName: task.RoomName
-  };
-}
-
-export function requireTransferTask(task: Task): Required<Pick<Task, "Resource" | "Pos" | "CreepName" | "RoomName">> {
-  if (task.CreepName === undefined) throw Error("CreepName not found in task");
-  if (task.Pos === undefined) throw Error("Pos not found in task");
-  if (task.Resource === undefined) throw Error("Resource not found in task");
-  if (task.RoomName === undefined) throw Error("RoomName not found in task");
-  return {
-    ...task,
-    CreepName: task.CreepName,
-    Resource: task.Resource,
-    Pos: task.Pos,
-    RoomName: task.RoomName
-  };
-}
-
-export function requireCreateConstructionSiteTask(
-  task: Task
-): Required<Pick<Task, "Pos" | "RoomName" | "StructureType">> {
-  if (task.Pos === undefined) throw Error("Pos not found in task");
-  if (task.RoomName === undefined) throw Error("RoomName not found in task");
-  if (task.StructureType === undefined) throw Error("StructureType not found in task");
-  return {
-    ...task,
-    Pos: task.Pos,
-    RoomName: task.RoomName,
-    StructureType: task.StructureType
-  };
 }
 
 export function getUniqueCreepName(creeps: Creep[]): string {
@@ -165,6 +87,7 @@ export function chessGetNextLocation(
   // TODO: rewrite without using Set, can be simplified
   const visited = new Set<string>();
   let rectSize = 1;
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     if (rectSize >= 25) {
       console.log("chess rect size is way too big");

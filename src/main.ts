@@ -1,8 +1,11 @@
-import { ErrorMapper } from "utils/ErrorMapper";
-import { ROLE_HARVESTER, RoleConstant, Task, TaskType } from "./state";
+import { ErrorMapper } from "./utils/ErrorMapper";
 import { placeExtensions, shouldBeUpgradingController, shouldSpawnMoreHarvesters, spawnHarvester } from "./logic";
 import { Harvester } from "./harvester-creep";
-import { Executor } from "./executor";
+import { handleRepairs } from "./repairer";
+
+export const ROLE_HARVESTER = "ROLE_HARVESTER";
+export const ROLE_REPAIRER = "ROLE_REPAIRER";
+export type RoleConstant = typeof ROLE_HARVESTER | typeof ROLE_REPAIRER;
 
 declare global {
   /*
@@ -25,6 +28,7 @@ declare global {
     role: RoleConstant;
 
     harvesterReadyToDeposit?: boolean;
+    repairerReadyToRepair?: boolean;
   }
 
   // Syntax for adding proprties to `global` (ex "global.log")
@@ -78,6 +82,9 @@ export const loop = ErrorMapper.wrapLoop(() => {
     throw Error("found more rooms than expected");
   }
   const room = rooms[0];
+  if (room.name !== "E35N17" && room.name !== "sim") {
+    throw Error(`got weird room name ${room.name}`);
+  }
   const spawns = Object.values(Game.spawns);
   if (spawns.length !== 1) throw Error("more spawns than expected");
   const spawn = spawns[0];
@@ -85,18 +92,20 @@ export const loop = ErrorMapper.wrapLoop(() => {
   if (Memory.shouldBeUpgradingController === undefined) Memory.shouldBeUpgradingController = false;
   shouldBeUpgradingController(room);
 
+  const creeps = Object.values(Game.creeps);
+
+  handleRepairs(room, spawn, creeps);
+
   if (shouldSpawnMoreHarvesters(room)) {
-    spawnHarvester(room);
+    spawnHarvester(room, spawn);
   }
 
-  const executor = new Executor(spawn);
-
-  for (const creep of Object.values(Game.creeps)) {
+  for (const creep of creeps) {
     if (creep.memory.role === ROLE_HARVESTER) {
-      const harvester = new Harvester(creep, executor, Memory.shouldBeUpgradingController, markObject, whoMarkedObject);
+      const harvester = new Harvester(creep, Memory.shouldBeUpgradingController, markObject, whoMarkedObject);
       harvester.perform();
     }
   }
 
-  placeExtensions(room, spawn, executor);
+  placeExtensions(room, spawn);
 });
