@@ -12,7 +12,7 @@ export function requireRoomByName(name: string): Room {
   return c;
 }
 
-export function getUniqueCreepName(creeps: Creep[], role?: RoleConstant): string {
+export function getUniqueCreepName(creeps: Creep[], prefix?: string): string {
   let c = 0;
   const m = new Set<string>();
   for (const creep of creeps) {
@@ -22,8 +22,8 @@ export function getUniqueCreepName(creeps: Creep[], role?: RoleConstant): string
   // eslint-disable-next-line no-constant-condition
   while (true) {
     let name = c.toString(10);
-    if (role) {
-      name = role + "-" + name;
+    if (prefix) {
+      name = prefix + "-" + name;
     }
 
     if (m.has(name)) {
@@ -128,4 +128,28 @@ export function notifyOk(value: number) {
 
 export function creepPrice(parts: BodyPartConstant[]): number {
   return parts.reduce((acc, c) => acc + BODYPART_COST[c], 0);
+}
+
+const lvlToExtCap = {
+  "1": 50,
+  "2": 50,
+  "3": 50,
+  "4": 50,
+  "5": 50,
+  "6": 50,
+  "7": 100,
+  "8": 200
+};
+
+export function canBarelyMove(
+  fillWith: BodyPartConstant,
+  extensions: number,
+  rcl: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+): BodyPartConstant[] {
+  const energyPerExt = lvlToExtCap[rcl];
+  const totalEnergy = energyPerExt * extensions + 300;
+
+  // let cost =
+
+  return [];
 }

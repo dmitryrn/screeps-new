@@ -8,7 +8,8 @@ export class Harvester {
     private shouldBeUpgradingController: boolean,
     private markObject: (id: string, creepId: string) => void,
     private whoMarkedObject: (id: string) => string | undefined,
-    private mines: Mine[] = []
+    private mines: Mine[] = [],
+    private room: Room
   ) {
     if (creep.memory.harvesterReadyToDeposit === undefined) {
       creep.memory.harvesterReadyToDeposit = false;
@@ -43,7 +44,7 @@ export class Harvester {
   }
 
   private getController() {
-    const { controller } = this.creep.room;
+    const { controller } = this.room;
     if (!controller) throw ErrCreepControllerUndefined;
     return controller;
   }

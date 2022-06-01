@@ -1,5 +1,11 @@
 import { ErrorMapper } from "./utils/ErrorMapper";
-import { placeExtensions, shouldBeUpgradingController, shouldSpawnMoreHarvesters, spawnHarvester } from "./logic";
+import {
+  placeExtensions,
+  shouldBeUpgradingController,
+  shouldSpawnMoreHarvesters,
+  smallAttack,
+  spawnHarvester
+} from "./logic";
 import { Harvester } from "./harvester-creep";
 import { handleRepairs } from "./repairer";
 import { RoomMining } from "./room-mining";
@@ -7,7 +13,8 @@ import { RoomMining } from "./room-mining";
 export const ROLE_HARVESTER = "ROLE_HARVESTER";
 export const ROLE_REPAIRER = "ROLE_REPAIRER";
 export const ROLE_MINER = "ROLE_MINER";
-export type RoleConstant = typeof ROLE_HARVESTER | typeof ROLE_REPAIRER | typeof ROLE_MINER;
+export const SMALL_ATTACKER = "SMALL_ATTACKER";
+export type RoleConstant = typeof ROLE_HARVESTER | typeof ROLE_REPAIRER | typeof ROLE_MINER | typeof SMALL_ATTACKER;
 
 declare global {
   /*
@@ -35,6 +42,8 @@ declare global {
 
     minerAssignedSourceId?: string;
     minerReadyToDeposit?: boolean;
+
+    roleSmallAttacker?: boolean;
   }
 
   // Syntax for adding proprties to `global` (ex "global.log")
@@ -43,6 +52,12 @@ declare global {
       log: any;
     }
   }
+}
+
+let c = 0;
+function getNextOffset(): number {
+  c += 1;
+  return c;
 }
 
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
@@ -84,14 +99,13 @@ export const loop = ErrorMapper.wrapLoop(() => {
       return Memory.markedObjects[id.toString()];
     }
 
-    const rooms = Object.values(Game.rooms);
-    if (rooms.length !== 1) {
-      throw Error("found more rooms than expected");
-    }
-    const room = rooms[0];
-    if (room.name !== "E35N17" && room.name !== "sim") {
-      throw Error(`got weird room name ${room.name}`);
-    }
+    // if (rooms.length !== 1) {
+    //   throw Error("found more rooms than expected");
+    // }
+    const room = Game.rooms.E35N17;
+    // if (room.name !== "E35N17" && room.name !== "sim") {
+    //   throw Error(`got weird room name ${room.name}`);
+    // }
     const spawns = Object.values(Game.spawns);
     if (spawns.length !== 1) throw Error("more spawns than expected");
     const spawn = spawns[0];
@@ -106,8 +120,10 @@ export const loop = ErrorMapper.wrapLoop(() => {
 
     handleRepairs(room, spawn, creeps);
 
-    if (shouldSpawnMoreHarvesters(room, mining.getMines())) {
-      spawnHarvester(room, spawn);
+    if ((Game.time + getNextOffset()) % 10 === 0) {
+      if (shouldSpawnMoreHarvesters(room, mining.getMines())) {
+        spawnHarvester(room, spawn);
+      }
     }
 
     for (const creep of creeps) {
@@ -117,13 +133,19 @@ export const loop = ErrorMapper.wrapLoop(() => {
           Memory.shouldBeUpgradingController,
           markObject,
           whoMarkedObject,
-          mining.getMines()
+          mining.getMines(),
+          room
         );
         harvester.perform();
       }
     }
 
-    placeExtensions(room, spawn);
+    if ((Game.time + getNextOffset()) % 10 === 0) {
+      console.log("placing extensions");
+      placeExtensions(room, spawn);
+    }
+
+    smallAttack(spawn, creeps);
   } catch (e) {
     console.log("caught something in main", e);
   }

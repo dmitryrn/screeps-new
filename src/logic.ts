@@ -1,7 +1,7 @@
 import { chessGetNextLocation, getUniqueCreepName } from "./utils";
-import { ROLE_HARVESTER, ROLE_MINER } from "./main";
+import { ROLE_HARVESTER, SMALL_ATTACKER } from "./main";
 import { Mine } from "./room-mining";
-import { read } from "fs";
+import { callbackify } from "util";
 
 export function shouldSpawnMoreHarvesters(room: Room, mines: Mine[]): boolean {
   const harvesters = room.find(FIND_MY_CREEPS, {
@@ -168,4 +168,48 @@ export function isInRangeOfEnemy(pos: RoomPosition): boolean {
     }
   }
   return false;
+}
+
+export function smallAttack(spawn: StructureSpawn, creeps: Creep[]) {
+  const attackers = [];
+  for (const creep of creeps) {
+    if (creep.memory.role === SMALL_ATTACKER) attackers.push(creep);
+  }
+
+  const claimer = [MOVE, CLAIM];
+  const attacker = [MOVE, ATTACK];
+
+  const roomToAttack = "E35N18";
+  if (attackers.length < 1) {
+    const b: BodyPartConstant[] = attacker;
+    // if (attackers.some(c => !!c.body.find(x => x.type === ATTACK))) {
+    //   b = claimer;
+    // }
+    console.log(
+      "spawn attacker",
+      spawn.spawnCreep(b, getUniqueCreepName(creeps, "juicer"), {
+        memory: {
+          role: SMALL_ATTACKER
+        }
+      })
+    );
+  } else {
+    // move
+    for (const creep of attackers) {
+      if (creep.room.name !== roomToAttack) {
+        const p = new RoomPosition(23, 47, roomToAttack);
+        creep.moveTo(p);
+      } else {
+        const closestHostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+        if (closestHostile) {
+          if (creep.attack(closestHostile) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(closestHostile);
+          }
+        }
+        if (creep.room.controller && creep.getActiveBodyparts(CLAIM) > 0) {
+          console.log("claim", creep.claimController(creep.room.controller));
+        }
+      }
+    }
+  }
 }

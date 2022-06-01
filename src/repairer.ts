@@ -78,7 +78,7 @@ export function handleRepairs(room: Room, spawn: StructureSpawn, creeps: Creep[]
     }
   }
 
-  if (repairers.length >= 1) return;
+  if (repairers.length >= 2) return;
 
   if (spawn.spawning) return;
 
