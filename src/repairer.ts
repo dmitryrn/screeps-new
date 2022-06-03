@@ -1,5 +1,6 @@
-import { getUniqueCreepName } from "./utils";
+import { creepPrice, getUniqueCreepName } from "./utils";
 import { ROLE_REPAIRER } from "./main";
+import { closestToSpawnExtensions } from "./logic";
 
 function log(...msgs: string[]) {
   console.log("handleRepairs:", ...msgs);
@@ -78,15 +79,17 @@ export function handleRepairs(room: Room, spawn: StructureSpawn, creeps: Creep[]
     }
   }
 
-  if (repairers.length >= 2) return;
+  if (repairers.length >= 1) return;
 
   if (spawn.spawning) return;
 
-  const code = spawn.spawnCreep([CARRY, WORK, MOVE, MOVE], getUniqueCreepName(creeps, "repairer"), {
+  const parts = [CARRY, WORK, MOVE, MOVE];
+  const code = spawn.spawnCreep(parts, getUniqueCreepName(creeps, "repairer"), {
     memory: {
       role: ROLE_REPAIRER,
       repairerReadyToRepair: false
-    }
+    },
+    energyStructures: closestToSpawnExtensions(spawn, creepPrice(parts)) ?? undefined
   });
   if (code !== OK) {
     if (code !== ERR_NOT_ENOUGH_RESOURCES) {

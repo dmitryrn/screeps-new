@@ -18,9 +18,12 @@ export class Harvester {
 
   private containerBelongsToMine(id: string): boolean | null {
     for (const mine of this.mines) {
+      if (mine.getRoom().name !== this.room.name) continue;
       const container = mine.getContainer();
       if (!container) return null;
-      if (container.id === id) return true;
+      if (container.id === id) {
+        return true;
+      }
     }
     return false;
   }
@@ -107,8 +110,13 @@ export class Harvester {
     } else {
       const possibleSources = [];
 
+      const droppedResource = this.creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+        filter: o => o.resourceType === "energy" && o.amount > this.creep.store.getCapacity()
+      });
+      if (droppedResource) possibleSources.push(droppedResource);
+
       const container = this.creep.pos.findClosestByPath(FIND_STRUCTURES, {
-        filter: o => o.structureType === STRUCTURE_CONTAINER && o.store.energy > 0
+        filter: o => o.structureType === STRUCTURE_CONTAINER && o.store.energy >= this.creep.store.getCapacity()
       });
       if (container && this.containerBelongsToMine(container.id)) {
         possibleSources.push(container);
@@ -116,9 +124,10 @@ export class Harvester {
 
       const source = this.creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE, {
         filter: o => {
-          if (this.sourceBelongsToMine(o.id) && this.getMineBySource(o.id)?.isContainerReady()) {
+          if (this.sourceBelongsToMine(o.id) && this.getMineBySource(o.id)?.getContainer()) {
             return false;
           }
+          if (o.energy === 0) return false;
           return true;
         }
       });
@@ -139,6 +148,7 @@ export class Harvester {
           "energy" in closest &&
           "room" in closest
         ) {
+          // source
           const c = this.creep.harvest(closest);
           if (c === ERR_NOT_IN_RANGE) {
             if (this.creep.moveTo(closest) !== OK) {
@@ -149,14 +159,17 @@ export class Harvester {
             console.log(`error harvesting for creep ${this.creep.name}, code: ${c}`);
             return;
           }
-        } else {
-          if (closest?.structureType === STRUCTURE_CONTAINER) {
-            if (this.creep.withdraw(closest, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-              this.creep.moveTo(closest);
-            }
-          } else {
-            console.log(`failed type assertion for closest source for harvester creep`);
+        } else if ("structureType" in closest && closest.structureType === STRUCTURE_CONTAINER) {
+          // container
+          if (this.creep.withdraw(closest, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            this.creep.moveTo(closest);
           }
+        } else if ("resourceType" in closest) {
+          if (this.creep.pickup(closest) === ERR_NOT_IN_RANGE) {
+            this.creep.moveTo(closest);
+          }
+        } else {
+          console.log(`failed type assertion for closest source for harvester creep`);
         }
       } catch (e) {
         console.log("caught something in harvester", e);

@@ -1,27 +1,14 @@
-import { chessGetNextLocation, getUniqueCreepName } from "./utils";
-import { ROLE_HARVESTER, SMALL_ATTACKER } from "./main";
+import { creepPrice, getUniqueCreepName } from "./utils";
+import { ROLE_DISCOVERER, ROLE_HARVESTER, SMALL_ATTACKER } from "./main";
 import { Mine } from "./room-mining";
-import { callbackify } from "util";
 
-export function shouldSpawnMoreHarvesters(room: Room, mines: Mine[]): boolean {
-  const harvesters = room.find(FIND_MY_CREEPS, {
-    filter: object => object.memory.role === ROLE_HARVESTER
-  });
-
-  if (!room.controller) {
-    console.log("no controller found");
-    return false;
-  }
-
-  if (room.controller.level === 8) {
-    console.log("ctrl is lvl 8");
-    return false;
-  }
+export function shouldSpawnMoreHarvesters(creeps: Creep[], mines: Mine[]): boolean {
+  const harvesters = creeps.filter(c => c.memory.role === ROLE_HARVESTER);
 
   let readyMines = 0;
   for (const m of mines) {
-    if (!m.isContainerReady()) continue;
-    if (m.getAliveMiners() < m.getPossibleSimultaniousMiners()) continue;
+    if (!m.getContainer()) continue;
+    if (!m.isMinerAlive()) continue;
     readyMines++;
   }
   const additional = 1 * readyMines;
@@ -47,7 +34,7 @@ export function spawnHarvester(room: Room, spawn: StructureSpawn): undefined {
       (moveParts + 2) * BODYPART_COST[MOVE] +
       (workParts + 1) * BODYPART_COST[WORK] +
       (carryParts + 1) * BODYPART_COST[CARRY];
-    if (intermediateCost <= maxMoney) {
+    if (intermediateCost <= maxMoney && moveParts <= 8) {
       cost = intermediateCost;
       moveParts += 2;
       workParts += 1;
@@ -55,6 +42,10 @@ export function spawnHarvester(room: Room, spawn: StructureSpawn): undefined {
       continue;
     }
     break;
+  }
+
+  if (!cost) {
+    throw Error("satisfying typescript");
   }
 
   const bodyParts = [
@@ -66,7 +57,8 @@ export function spawnHarvester(room: Room, spawn: StructureSpawn): undefined {
   const code = spawn.spawnCreep(bodyParts, getUniqueCreepName(Object.values(Game.creeps), "harvester"), {
     memory: {
       role: ROLE_HARVESTER
-    }
+    },
+    energyStructures: closestToSpawnExtensions(spawn, cost) ?? undefined
   });
   if (code !== OK) {
     // console.log(`error spawning creep (${bodyParts}, cost: ${cost}): ${code}`);
@@ -145,6 +137,12 @@ export function isInRangeOfEnemy(pos: RoomPosition): boolean {
     throw Error('isInRangeOfEnemy: didn"t find controller');
   }
 
+  const s = Object.values(Game.spawns)[0];
+  s.room
+    .lookForAtArea(LOOK_STRUCTURES, s.pos.y - 3, s.pos.x - 3, s.pos.y + 3, s.pos.x + 3, true)
+    .filter(o => o.type === "structure" && o.structure.structureType === "extension")
+    .forEach(ext => ext.structure.destroy());
+
   const res = room.lookForAtArea(LOOK_CREEPS, pos.y - 5, pos.x - 5, pos.y + 5, pos.x + 5, true);
   for (const re of res) {
     if (re.creep.owner !== controller.owner) {
@@ -174,7 +172,8 @@ export function smallAttack(spawn: StructureSpawn, creeps: Creep[]) {
       spawn.spawnCreep(b, getUniqueCreepName(creeps, "juicer"), {
         memory: {
           role: SMALL_ATTACKER
-        }
+        },
+        energyStructures: closestToSpawnExtensions(spawn, creepPrice(b)) ?? undefined
       })
     );
   } else {
@@ -184,32 +183,63 @@ export function smallAttack(spawn: StructureSpawn, creeps: Creep[]) {
         const p = new RoomPosition(23, 47, roomToAttack);
         creep.moveTo(p);
       } else {
-        const closestHostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
-        if (closestHostile) {
-          if (creep.attack(closestHostile) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(closestHostile);
+        // eslint-disable-next-line no-empty
+        if (moveAwayFromRoomEdge(creep)) {
+        } else {
+          const closestHostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+          if (closestHostile) {
+            if (creep.attack(closestHostile) === ERR_NOT_IN_RANGE) {
+              creep.moveTo(closestHostile);
+            }
           }
-        }
-        if (creep.room.controller && creep.getActiveBodyparts(CLAIM) > 0) {
-          console.log("claim", creep.claimController(creep.room.controller));
+          if (creep.room.controller && creep.getActiveBodyparts(CLAIM) > 0) {
+            console.log("claim", creep.claimController(creep.room.controller));
+          }
         }
       }
     }
   }
 }
 
-let memoExtensionsCount: undefined | Map<string, number>;
-export function getExtensionsCount(room: Room): number {
-  if (!memoExtensionsCount) {
-    memoExtensionsCount = new Map();
-  }
-  const n = memoExtensionsCount.get(room.name);
-  if (n !== undefined) return n;
+export function moveAwayFromRoomEdge(creep: Creep): boolean {
+  const r = Math.floor(Math.random() * 3);
 
-  const extensions = room.find(FIND_MY_STRUCTURES, {
+  if (creep.pos.x === 0) {
+    const d = [TOP_RIGHT, RIGHT, BOTTOM_RIGHT][r];
+    creep.move(d);
+    return true;
+  }
+  if (creep.pos.x === 49) {
+    const d = [TOP_LEFT, LEFT, BOTTOM_LEFT][r];
+    creep.move(d);
+    return true;
+  }
+  if (creep.pos.y === 0) {
+    const d = [BOTTOM_LEFT, BOTTOM, BOTTOM_RIGHT][r];
+    creep.move(d);
+    return true;
+  }
+  if (creep.pos.y === 49) {
+    const d = [TOP_LEFT, TOP, TOP_RIGHT][r];
+    creep.move(d);
+    return true;
+  }
+  return false;
+}
+
+let memoExtensionsCount: undefined | number;
+let lastRefreshed = Date.now();
+
+export function getExtensionsCount(homeRoom: Room): number {
+  if (memoExtensionsCount !== undefined && Date.now() - lastRefreshed < 1000 * 10) {
+    return memoExtensionsCount;
+  }
+
+  const extensions = homeRoom.find(FIND_MY_STRUCTURES, {
     filter: object => object.structureType === STRUCTURE_EXTENSION
   });
-  memoExtensionsCount.set(room.name, extensions.length);
+  lastRefreshed = Date.now();
+  memoExtensionsCount = extensions.length;
   return extensions.length;
 }
 
@@ -223,12 +253,7 @@ export function placeExtensionsV2(room: Room) {
     return;
   }
 
-  if (
-    room.find(FIND_MY_CONSTRUCTION_SITES, {
-      filter: o => o.structureType === "extension"
-    }).length > 0
-  )
-    return;
+  if (room.find(FIND_MY_CONSTRUCTION_SITES).length > 0) return;
 
   const maxAllowedExtensions = levelToExtensions[room.controller.level];
   if (maxAllowedExtensions === undefined) {
@@ -253,6 +278,7 @@ export function placeExtensionsV2(room: Room) {
     let x = tl[0];
     let y = tl[1];
     let c = x;
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (y > br[1]) {
         if (x >= br[0]) break;
@@ -276,6 +302,7 @@ export function placeExtensionsV2(room: Room) {
     let c = tl[0] - (br[1] - tl[1]);
     let x = c;
     let y = tl[1];
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (y > br[1]) {
         c += 4;
@@ -326,4 +353,64 @@ export function placeExtensionsV2(room: Room) {
   }
 
   console.log(`total extensions drawn`, totalMarked);
+}
+
+// moves a 1 MOVE creep to a room so that I have visibility of it
+export function discover(targetRooms: string[], spawn: StructureSpawn, creeps: Creep[]) {
+  for (const room of targetRooms) {
+    const creep = creeps.find(c => c.memory.discovererTargetRoom === room);
+    if (!creep) {
+      if (spawn.spawning) return;
+      const parts = [MOVE];
+      spawn.spawnCreep(parts, getUniqueCreepName(creeps, "sussy-baka"), {
+        memory: {
+          role: ROLE_DISCOVERER,
+          discovererTargetRoom: room
+        },
+        energyStructures: closestToSpawnExtensions(spawn, creepPrice(parts)) ?? undefined
+      });
+      continue;
+    }
+
+    if (creep.pos.roomName !== room) {
+      const route = Game.map.findRoute(creep.room.name, room);
+      if (typeof route !== "object" || route.length === 0) {
+        console.log(`discoverer: no path`);
+        return;
+      }
+      const exit = creep.pos.findClosestByPath(route[0].exit);
+      if (!exit) {
+        console.log(`discoverer: can't find exit`);
+        return;
+      }
+      creep.moveTo(exit);
+    } else {
+      moveAwayFromRoomEdge(creep);
+    }
+  }
+}
+
+export function closestToSpawnExtensions(spawn: StructureSpawn, cost: number): StructureExtension[] | null {
+  const exts = spawn.room.find(FIND_MY_STRUCTURES, {
+    filter: o => o.structureType === "extension" && o.store.energy > 0
+  }) as unknown as StructureExtension[];
+  if (exts.length === 0) return [];
+  if (exts[0].structureType !== "extension") {
+    console.log(`unexpectedly got non-extension`);
+    return [];
+  }
+
+  const targets = [];
+  // DESC sort
+  exts.sort((a, b) => a.pos.getRangeTo(spawn) + b.pos.getRangeTo(spawn));
+
+  let intermCost = 0;
+  for (const ext of exts) {
+    if (intermCost >= cost) return targets;
+    intermCost += ext.store.energy;
+    targets.push(ext);
+  }
+
+  console.log(`closestExtensionsToSpawn: not enough? bug?`);
+  return null;
 }

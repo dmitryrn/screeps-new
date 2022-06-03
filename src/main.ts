@@ -1,5 +1,6 @@
 import { ErrorMapper } from "./utils/ErrorMapper";
 import {
+  discover,
   placeExtensionsV2,
   shouldBeUpgradingController,
   shouldSpawnMoreHarvesters,
@@ -14,7 +15,13 @@ export const ROLE_HARVESTER = "ROLE_HARVESTER";
 export const ROLE_REPAIRER = "ROLE_REPAIRER";
 export const ROLE_MINER = "ROLE_MINER";
 export const SMALL_ATTACKER = "SMALL_ATTACKER";
-export type RoleConstant = typeof ROLE_HARVESTER | typeof ROLE_REPAIRER | typeof ROLE_MINER | typeof SMALL_ATTACKER;
+export const ROLE_DISCOVERER = "ROLE_DISCOVERER";
+export type RoleConstant =
+  | typeof ROLE_HARVESTER
+  | typeof ROLE_REPAIRER
+  | typeof ROLE_MINER
+  | typeof SMALL_ATTACKER
+  | typeof ROLE_DISCOVERER;
 
 declare global {
   /*
@@ -44,9 +51,12 @@ declare global {
     minerReadyToDeposit?: boolean;
 
     roleSmallAttacker?: boolean;
+
+    discovererTargetRoom?: string;
   }
 
   // Syntax for adding proprties to `global` (ex "global.log")
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
     interface Global {
       log: any;
@@ -92,9 +102,11 @@ export const loop = ErrorMapper.wrapLoop(() => {
       Memory.markedObjects = {};
     }
 
+    // eslint-disable-next-line no-inner-declarations
     function markObject(id: string, creepId: string) {
       Memory.markedObjects[id.toString()] = creepId.toString();
     }
+    // eslint-disable-next-line no-inner-declarations
     function whoMarkedObject(id: string): string | undefined {
       return Memory.markedObjects[id.toString()];
     }
@@ -103,8 +115,8 @@ export const loop = ErrorMapper.wrapLoop(() => {
     //   throw Error("found more rooms than expected");
     // }
 
-    const room = Game.rooms.sim ?? Game.rooms.E35N17;
-    if (!room) {
+    const homeRoom = Game.rooms.sim ?? Game.rooms.E35N17;
+    if (!homeRoom) {
       throw Error("didn't find room in main");
     }
     // if (room.name !== "E35N17" && room.name !== "sim") {
@@ -115,18 +127,18 @@ export const loop = ErrorMapper.wrapLoop(() => {
     const spawn = spawns[0];
 
     if (Memory.shouldBeUpgradingController === undefined) Memory.shouldBeUpgradingController = false;
-    shouldBeUpgradingController(room);
+    shouldBeUpgradingController(homeRoom);
 
     const creeps = Object.values(Game.creeps);
 
-    const mining = new RoomMining(room, spawn, creeps);
+    const mining = new RoomMining(homeRoom, [homeRoom.name, "E35N18"], spawn, creeps);
     mining.process();
 
-    handleRepairs(room, spawn, creeps);
+    handleRepairs(homeRoom, spawn, creeps);
 
     if ((Game.time + getNextOffset()) % 10 === 0) {
-      if (shouldSpawnMoreHarvesters(room, mining.getMines())) {
-        spawnHarvester(room, spawn);
+      if (shouldSpawnMoreHarvesters(creeps, mining.getMines())) {
+        spawnHarvester(homeRoom, spawn);
       }
     }
 
@@ -138,7 +150,7 @@ export const loop = ErrorMapper.wrapLoop(() => {
           markObject,
           whoMarkedObject,
           mining.getMines(),
-          room
+          homeRoom
         );
         harvester.perform();
       }
@@ -147,10 +159,12 @@ export const loop = ErrorMapper.wrapLoop(() => {
     if ((Game.time + getNextOffset()) % 10 === 0) {
       console.log("trying to place extensions");
       // placeExtensions(room, spawn);
-      placeExtensionsV2(room);
+      placeExtensionsV2(homeRoom);
     }
 
     smallAttack(spawn, creeps);
+
+    discover(["E35N18"], spawn, creeps);
   } catch (e) {
     console.log("caught something in main", e);
   }
