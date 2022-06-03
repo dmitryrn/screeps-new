@@ -401,8 +401,7 @@ export function closestToSpawnExtensions(spawn: StructureSpawn, cost: number): S
   }
 
   const targets = [];
-  // DESC sort
-  exts.sort((a, b) => a.pos.getRangeTo(spawn) + b.pos.getRangeTo(spawn));
+  exts.sort((a, b) => a.pos.getRangeTo(spawn) - b.pos.getRangeTo(spawn));
 
   let intermCost = 0;
   for (const ext of exts) {

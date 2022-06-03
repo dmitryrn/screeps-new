@@ -25,6 +25,12 @@ export function handleRepairs(room: Room, spawn: StructureSpawn, creeps: Creep[]
   }
 
   for (const creep of repairers) {
+    // if (!creep.room.controller!.sign) {
+    //   const c = creep.signController(creep.room.controller!, "Peace to all my neighbours!");
+    //   if (c !== OK) creep.moveTo(creep.room.controller!);
+    //   return;
+    // }
+
     if (creep.store.energy === 0) {
       creep.memory.repairerReadyToRepair = false;
     }
