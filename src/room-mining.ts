@@ -1,6 +1,7 @@
 // eslint-disable-next-line max-classes-per-file
 import { ROLE_MINER } from "./main";
 import { getUniqueCreepName } from "./utils";
+import { getExtensionsCount } from "./logic";
 
 export class Mine {
   private simultaneousMiners: number | null = null;
@@ -35,6 +36,7 @@ export class Mine {
       }
       this.simultaneousMiners += 1;
     }
+    if (this.simultaneousMiners > 3) this.simultaneousMiners = 3;
 
     const t: [LookAtResult<LookConstant>[], [number, number]] = [
       source.room.lookAt(source.pos.x, source.pos.y - 2),
@@ -310,7 +312,6 @@ export class RoomMining {
 
     if (!this.queuedSpawn && !this.spawn.spawning) {
       const aliveMiners = mine.getAliveMiners();
-      console.log("aliveMiners", aliveMiners);
 
       if (mine.isContainerReady() && aliveMiners < mine.getPossibleSimultaniousMiners()) {
         this.spawn.spawnCreep([MOVE, CARRY, WORK, WORK], getUniqueCreepName(this.creeps, "miner"), {

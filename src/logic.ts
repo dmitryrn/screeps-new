@@ -18,13 +18,6 @@ export function shouldSpawnMoreHarvesters(room: Room, mines: Mine[]): boolean {
     return false;
   }
 
-  // const extensions = room.find(FIND_MY_STRUCTURES, {
-  //   filter: object => object.structureType === STRUCTURE_EXTENSION
-  // });
-  // if (extensions.length >= 5) {
-  //   return harvesters.length < 8;
-  // }
-
   let readyMines = 0;
   for (const m of mines) {
     if (!m.isContainerReady()) continue;
@@ -42,11 +35,7 @@ export function spawnHarvester(room: Room, spawn: StructureSpawn): undefined {
     return;
   }
 
-  const extensions = room.find(FIND_MY_STRUCTURES, {
-    filter: object => object.structureType === STRUCTURE_EXTENSION
-  });
-
-  const maxMoney = extensions.length * 50 + 300;
+  const maxMoney = getExtensionsCount(room) * 50 + 300;
 
   let moveParts = 0;
   let workParts = 0;
@@ -96,45 +85,40 @@ const levelToExtensions: { [k: number]: number } = {
   8: 60
 };
 
-export function placeExtensions(room: Room, spawn: StructureSpawn) {
-  if (!room.controller) {
-    console.log("no controller found");
-    return;
-  }
-
-  const extensions = spawn.room.find(FIND_MY_STRUCTURES, {
-    filter: object => object.structureType === STRUCTURE_EXTENSION
-  });
-  if (extensions.length === 8) return;
-
-  const maxAllowedExtensions = levelToExtensions[room.controller.level];
-  if (maxAllowedExtensions === undefined) {
-    console.log(`invalid room control level ${room.controller.level}`);
-    return;
-  }
-  if (extensions.length >= maxAllowedExtensions) {
-    return;
-  }
-
-  const extensionsConstrSites = spawn.room.find(FIND_MY_CONSTRUCTION_SITES, {
-    filter: object => object.structureType === STRUCTURE_EXTENSION
-  });
-  if (extensionsConstrSites.length > 0) return;
-
-  // eslint-disable-next-line @typescript-eslint/no-shadow
-  const [x, y] = chessGetNextLocation([spawn.pos.x, spawn.pos.y], (x, y) => {
-    const res = spawn.room.lookAt(x, y);
-    for (const re of res) {
-      if (re.type === "structure") return true;
-      if (re.type === "terrain" && re.terrain !== "plain") return true;
-    }
-    return false;
-  });
-
-  const code = room.createConstructionSite(x, y, STRUCTURE_EXTENSION);
-  // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-  if (code !== OK) console.log(`error placing extension at ${[x, y]}, code: ${code}`);
-}
+// export function placeExtensions(room: Room, spawn: StructureSpawn) {
+//   if (!room.controller) {
+//     console.log("no controller found");
+//     return;
+//   }
+//
+//   if (getExtensionsCount(room) === 8) return;
+//
+//   const maxAllowedExtensions = levelToExtensions[room.controller.level];
+//   if (maxAllowedExtensions === undefined) {
+//     console.log(`invalid room control level ${room.controller.level}`);
+//     return;
+//   }
+//   if (getExtensionsCount(room) >= maxAllowedExtensions) return;
+//
+//   const extensionsConstrSites = spawn.room.find(FIND_MY_CONSTRUCTION_SITES, {
+//     filter: object => object.structureType === STRUCTURE_EXTENSION
+//   });
+//   if (extensionsConstrSites.length > 0) return;
+//
+//   // eslint-disable-next-line @typescript-eslint/no-shadow
+//   const [x, y] = chessGetNextLocation([spawn.pos.x, spawn.pos.y], (x, y) => {
+//     const res = spawn.room.lookAt(x, y);
+//     for (const re of res) {
+//       if (re.type === "structure") return true;
+//       if (re.type === "terrain" && re.terrain !== "plain") return true;
+//     }
+//     return false;
+//   });
+//
+//   const code = room.createConstructionSite(x, y, STRUCTURE_EXTENSION);
+//   // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+//   if (code !== OK) console.log(`error placing extension at ${[x, y]}, code: ${code}`);
+// }
 
 export function shouldBeUpgradingController(room: Room) {
   if (!room.controller) {
@@ -212,4 +196,134 @@ export function smallAttack(spawn: StructureSpawn, creeps: Creep[]) {
       }
     }
   }
+}
+
+let memoExtensionsCount: undefined | Map<string, number>;
+export function getExtensionsCount(room: Room): number {
+  if (!memoExtensionsCount) {
+    memoExtensionsCount = new Map();
+  }
+  const n = memoExtensionsCount.get(room.name);
+  if (n !== undefined) return n;
+
+  const extensions = room.find(FIND_MY_STRUCTURES, {
+    filter: object => object.structureType === STRUCTURE_EXTENSION
+  });
+  memoExtensionsCount.set(room.name, extensions.length);
+  return extensions.length;
+}
+
+export function placeExtensionsV2(room: Room) {
+  if (room.name !== "E35N17") {
+    return;
+  }
+
+  if (!room.controller) {
+    console.log("no controller found");
+    return;
+  }
+
+  if (
+    room.find(FIND_MY_CONSTRUCTION_SITES, {
+      filter: o => o.structureType === "extension"
+    }).length > 0
+  )
+    return;
+
+  const maxAllowedExtensions = levelToExtensions[room.controller.level];
+  if (maxAllowedExtensions === undefined) {
+    console.log(`invalid room control level ${room.controller.level}`);
+    return;
+  }
+  if (getExtensionsCount(room) >= maxAllowedExtensions) return;
+
+  const tl = [36, 10];
+  const br = [48, 23];
+
+  const path = new Set<string>(); // x-y
+
+  const checkWall = (x: number, y: number) => room.lookAt(x, y).some(o => o.terrain === "wall");
+
+  const checkInBounds = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < 50 && y < 50 && !checkWall(x, y) && x <= br[0] && x >= tl[0] && y >= tl[1] && y <= br[1];
+
+  const placeSite = (x: number, y: number) => room.createConstructionSite(x, y, STRUCTURE_EXTENSION);
+
+  const placePath1 = () => {
+    let x = tl[0];
+    let y = tl[1];
+    let c = x;
+    while (true) {
+      if (y > br[1]) {
+        if (x >= br[0]) break;
+
+        c += 4;
+        x = c;
+        y = tl[1];
+      }
+
+      if (checkInBounds(x, y)) {
+        room.visual.circle(x, y, {
+          fill: "#00FF00"
+        });
+        path.add(x.toString() + "-" + y.toString());
+      }
+      x--;
+      y++;
+    }
+  };
+  const placePath2 = () => {
+    let c = tl[0] - (br[1] - tl[1]);
+    let x = c;
+    let y = tl[1];
+    while (true) {
+      if (y > br[1]) {
+        c += 4;
+        x = c;
+        y = tl[1];
+
+        if (x >= br[0]) break;
+      }
+
+      if (checkInBounds(x, y)) {
+        room.visual.circle(x, y, {
+          fill: "#00FF00"
+        });
+        path.add(x.toString() + "-" + y.toString());
+      }
+      x++;
+      y++;
+    }
+  };
+
+  placePath1();
+  placePath2();
+
+  let placed = false;
+
+  let totalMarked = 0;
+  outer: for (let y = tl[1]; y <= br[1]; y++) {
+    for (let x = tl[0]; x <= br[0]; x++) {
+      if (!path.has(x.toString() + "-" + y.toString()) && !checkWall(x, y)) {
+        room.visual.circle(x, y, {
+          fill: "#FFFF00"
+        });
+        if (room.lookAt(x, y).some(o => o.type === "structure")) {
+          continue;
+        }
+        const c = placeSite(x, y);
+        placed = true;
+        if (c !== OK) {
+          console.log(`error placing construction site`);
+        }
+        if (placed) return;
+        if (totalMarked === 49) {
+          break outer;
+        }
+        totalMarked++;
+      }
+    }
+  }
+
+  console.log(`total extensions drawn`, totalMarked);
 }

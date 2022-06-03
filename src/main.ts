@@ -1,6 +1,6 @@
 import { ErrorMapper } from "./utils/ErrorMapper";
 import {
-  placeExtensions,
+  placeExtensionsV2,
   shouldBeUpgradingController,
   shouldSpawnMoreHarvesters,
   smallAttack,
@@ -145,8 +145,9 @@ export const loop = ErrorMapper.wrapLoop(() => {
     }
 
     if ((Game.time + getNextOffset()) % 10 === 0) {
-      console.log("placing extensions");
-      placeExtensions(room, spawn);
+      console.log("trying to place extensions");
+      // placeExtensions(room, spawn);
+      placeExtensionsV2(room);
     }
 
     smallAttack(spawn, creeps);
