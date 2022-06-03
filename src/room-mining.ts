@@ -7,7 +7,12 @@ export class Mine {
   private container: StructureContainer | null = null;
   private containerBuildLocation: RoomPosition | null = null;
 
-  public constructor(private source: Source, private spawn: StructureSpawn, private creeps: Creep[]) {
+  public constructor(
+    private source: Source,
+    private spawn: StructureSpawn,
+    private creeps: Creep[],
+    private room: Room
+  ) {
     this.simultaneousMiners = 0;
 
     const visited = new Set();
@@ -74,6 +79,10 @@ export class Mine {
     if (minRangePos) {
       this.containerBuildLocation = minRangePos;
       // console.log("min range pos", minRangePos);
+
+      if (!this.isContainerReady() && !this.hasContainerConstructionSite()) {
+        room.createConstructionSite(this.containerBuildLocation, STRUCTURE_CONTAINER);
+      }
     } else {
       console.log(`didn't find min range pos, source: ${source.id}`);
     }
@@ -168,7 +177,7 @@ export class RoomMining {
 
     for (const source of res) {
       try {
-        const m = new Mine(source, this.spawn, this.creeps);
+        const m = new Mine(source, this.spawn, this.creeps, this.room);
         this.mines.push(m);
       } catch (e) {
         console.log(`error initializing mine (sourceID: ${source.id})`);
@@ -304,7 +313,7 @@ export class RoomMining {
       console.log("aliveMiners", aliveMiners);
 
       if (mine.isContainerReady() && aliveMiners < mine.getPossibleSimultaniousMiners()) {
-        this.spawn.spawnCreep([MOVE, CARRY, WORK, WORK], getUniqueCreepName(this.creeps), {
+        this.spawn.spawnCreep([MOVE, CARRY, WORK, WORK], getUniqueCreepName(this.creeps, "miner"), {
           memory: {
             role: ROLE_MINER,
             minerAssignedSourceId: sourceID

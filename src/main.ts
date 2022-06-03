@@ -102,7 +102,11 @@ export const loop = ErrorMapper.wrapLoop(() => {
     // if (rooms.length !== 1) {
     //   throw Error("found more rooms than expected");
     // }
-    const room = Game.rooms.E35N17;
+
+    const room = Game.rooms.sim ?? Game.rooms.E35N17;
+    if (!room) {
+      throw Error("didn't find room in main");
+    }
     // if (room.name !== "E35N17" && room.name !== "sim") {
     //   throw Error(`got weird room name ${room.name}`);
     // }

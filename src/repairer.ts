@@ -82,7 +82,7 @@ export function handleRepairs(room: Room, spawn: StructureSpawn, creeps: Creep[]
 
   if (spawn.spawning) return;
 
-  const code = spawn.spawnCreep([CARRY, WORK, MOVE, MOVE], getUniqueCreepName(creeps), {
+  const code = spawn.spawnCreep([CARRY, WORK, MOVE, MOVE], getUniqueCreepName(creeps, "repairer"), {
     memory: {
       role: ROLE_REPAIRER,
       repairerReadyToRepair: false

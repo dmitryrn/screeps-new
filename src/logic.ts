@@ -74,7 +74,7 @@ export function spawnHarvester(room: Room, spawn: StructureSpawn): undefined {
     ...Array.from({ length: moveParts }).map(() => MOVE)
   ];
 
-  const code = spawn.spawnCreep(bodyParts, getUniqueCreepName(Object.values(Game.creeps)), {
+  const code = spawn.spawnCreep(bodyParts, getUniqueCreepName(Object.values(Game.creeps), "harvester"), {
     memory: {
       role: ROLE_HARVESTER
     }
