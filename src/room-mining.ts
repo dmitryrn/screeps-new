@@ -1,7 +1,9 @@
 // eslint-disable-next-line max-classes-per-file
 import { ROLE_MINER } from "./main";
-import { creepPrice, getUniqueCreepName } from "./utils";
-import { closestToSpawnExtensions, getExtensionsCount } from "./logic";
+import { getUniqueCreepName, random } from "./utils";
+import { CreepSpawning, getExtensionsCount } from "./logic";
+
+const ticksFromSpawnToMineMemo: { [k: string]: { lastCheckedAtTick: number; ticks: number } } = {};
 
 export class Mine {
   private container: StructureContainer | null = null;
@@ -12,6 +14,13 @@ export class Mine {
     private creeps: Creep[],
     private room: Room
   ) {
+    const lastChecked = ticksFromSpawnToMineMemo[source.id]?.lastCheckedAtTick;
+    if (lastChecked !== undefined) {
+      if (Game.time - lastChecked > 25) {
+        delete ticksFromSpawnToMineMemo[source.id];
+      }
+    }
+
     const around = source.room.lookAtArea(source.pos.y - 1, source.pos.x - 1, source.pos.y + 1, source.pos.x + 1, true);
 
     let containerPos: RoomPosition | undefined;
@@ -38,6 +47,92 @@ export class Mine {
       }
     }
     return false;
+  }
+
+  public getMiner(): Creep | null {
+    for (const cr of this.creeps) {
+      if (cr.memory.role === ROLE_MINER && cr.memory.minerAssignedSourceId === this.getSource().id) {
+        return cr;
+      }
+    }
+    return null;
+  }
+
+  public ticksFromSpawnToMine(): number {
+    if (ticksFromSpawnToMineMemo[this.source.id] !== undefined) {
+      return ticksFromSpawnToMineMemo[this.source.id].ticks;
+    }
+
+    const ret = PathFinder.search(
+      this.spawn.pos,
+      { pos: this.source.pos, range: 1 },
+      {
+        plainCost: 2,
+        swampCost: 10,
+        roomCallback(roomName: string): boolean | CostMatrix {
+          const room = Game.rooms[roomName];
+          if (!room) {
+            console.log(`class Mine: didn't find room ${roomName} in pathfinding`);
+            return false;
+          }
+          const costs = new PathFinder.CostMatrix();
+
+          room.find(FIND_STRUCTURES).forEach(s => {
+            if (s.structureType === "road") {
+              // Favor roads over plain tiles
+              costs.set(s.pos.x, s.pos.y, 1);
+            } else if (s.structureType !== "container" && s.structureType !== "rampart") {
+              // Can't walk through non-walkable buildings
+              costs.set(s.pos.x, s.pos.y, 0xff);
+            }
+          });
+
+          // Avoid creeps in the room
+          // room.find(FIND_CREEPS).forEach(function (creep) {
+          //   costs.set(creep.pos.x, creep.pos.y, 0xff);
+          // });
+
+          return costs;
+        }
+      }
+    );
+
+    // following is for [MOVE,MOVE,WORK,WORK,WORK,WORK,WORK,CARRY]
+    const ticksPerMovePlain = 3.3;
+    const ticksPerMoveRoad = 2.2;
+    const ticksToSpawn = CREEP_SPAWN_TIME * 8; // 3 ticks * 8 parts
+
+    const moves = ret.path.length;
+
+    let roads = 0;
+
+    const r1 = Math.floor(random() * 16).toString(16);
+    const r2 = Math.floor(random() * 16).toString(16);
+    const g1 = Math.floor(random() * 16).toString(16);
+    const g2 = Math.floor(random() * 16).toString(16);
+    const b1 = Math.floor(random() * 16).toString(16);
+    const b2 = Math.floor(random() * 16).toString(16);
+    const color = `#${r1}${r2}${g1}${g2}${b1}${b2}`;
+    // console.log(`color ${color}`);
+
+    for (let i = 0; i < ret.path.length - 1; i++) {
+      if (ret.path[i].look().some(x => x.structure?.structureType === "road")) {
+        roads += 1;
+      }
+      const room = Game.rooms[ret.path[i].roomName];
+      if (room) {
+        room.visual.line(ret.path[i], ret.path[i + 1], {
+          color
+        });
+      }
+    }
+
+    const totalTicks = ticksPerMoveRoad * roads + ticksPerMovePlain * (moves - roads) + ticksToSpawn;
+    ticksFromSpawnToMineMemo[this.source.id] = {
+      ticks: totalTicks,
+      lastCheckedAtTick: Game.time
+    };
+    return totalTicks; // that's gonna be a bit less so the predecessor creep has time to die
   }
 
   public getSource(): Source {
@@ -84,7 +179,8 @@ export class RoomMining {
     private homeRoom: Room,
     private roomsToMineIn: string[],
     private spawn: StructureSpawn,
-    private creeps: Creep[]
+    private creeps: Creep[],
+    private creepSpawning: CreepSpawning
   ) {}
 
   public process() {
@@ -184,6 +280,13 @@ export class RoomMining {
 
   private spawnCreepForMineIfNeeded(mine: Mine) {
     if (this.queuedSpawn || this.spawn.spawning) return;
+
+    // const brandNewCreepReachesMineIn = mine.ticksFromSpawnToMine();
+    // console.log(`brandNewCreepReachesMineIn ${brandNewCreepReachesMineIn}, sourceID: ${mine.getSource().id}`);
+
+    const miner = mine.getMiner();
+    if (miner && (miner.ticksToLive ?? Number.MAX_SAFE_INTEGER) > mine.ticksFromSpawnToMine()) return;
+
     if (mine.isMinerAlive()) return;
     if (!mine.getContainer()) return;
 
@@ -195,12 +298,9 @@ export class RoomMining {
     const sourceID = mine.getSource().id;
 
     const parts = [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE];
-    this.spawn.spawnCreep(parts, getUniqueCreepName(this.creeps, "miner"), {
-      memory: {
-        role: ROLE_MINER,
-        minerAssignedSourceId: sourceID
-      },
-      energyStructures: closestToSpawnExtensions(this.spawn, creepPrice(parts)) ?? undefined
+    this.creepSpawning.spawnCreep(this.spawn, parts, getUniqueCreepName(this.creeps, "miner"), {
+      role: ROLE_MINER,
+      minerAssignedSourceId: sourceID
     });
     this.queuedSpawn = true;
   }

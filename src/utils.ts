@@ -129,3 +129,28 @@ export function notifyOk(value: number) {
 export function creepPrice(parts: BodyPartConstant[]): number {
   return parts.reduce((acc, c) => acc + BODYPART_COST[c], 0);
 }
+
+let mW = 123456789;
+let mZ = 987654321;
+const mask = 0xffffffff;
+
+// Takes any integer
+export function seed(i: number) {
+  // eslint-disable-next-line no-bitwise
+  mW = (123456789 + i) & mask;
+  // eslint-disable-next-line no-bitwise
+  mZ = (987654321 - i) & mask;
+}
+
+// Returns number between 0 (inclusive) and 1.0 (exclusive),
+// just like Math.random().
+export function random() {
+  // eslint-disable-next-line no-bitwise
+  mZ = (36969 * (mZ & 65535) + (mZ >> 16)) & mask;
+  // eslint-disable-next-line no-bitwise
+  mW = (18000 * (mW & 65535) + (mW >> 16)) & mask;
+  // eslint-disable-next-line no-bitwise
+  let result = ((mZ << 16) + (mW & 65535)) >>> 0;
+  result /= 4294967296;
+  return result;
+}

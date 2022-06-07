@@ -1,12 +1,12 @@
 import { creepPrice, getUniqueCreepName } from "./utils";
 import { ROLE_REPAIRER } from "./main";
-import { closestToSpawnExtensions } from "./logic";
+import { CreepSpawning, closestToSpawnExtensions } from "./logic";
 
 function log(...msgs: string[]) {
   console.log("handleRepairs:", ...msgs);
 }
 
-export function handleRepairs(room: Room, spawn: StructureSpawn, creeps: Creep[]) {
+export function handleRepairs(room: Room, spawn: StructureSpawn, creeps: Creep[], creepSpawning: CreepSpawning) {
   if (!room.controller) {
     log("no controller in the room");
     return;
@@ -90,13 +90,11 @@ export function handleRepairs(room: Room, spawn: StructureSpawn, creeps: Creep[]
   if (spawn.spawning) return;
 
   const parts = [CARRY, WORK, MOVE, MOVE];
-  const code = spawn.spawnCreep(parts, getUniqueCreepName(creeps, "repairer"), {
-    memory: {
-      role: ROLE_REPAIRER,
-      repairerReadyToRepair: false
-    },
-    energyStructures: closestToSpawnExtensions(spawn, creepPrice(parts)) ?? undefined
+  const code = creepSpawning.spawnCreep(spawn, parts, getUniqueCreepName(creeps, "repairer"), {
+    role: ROLE_REPAIRER,
+    repairerReadyToRepair: false
   });
+  if (code === null) return; // already queued
   if (code !== OK) {
     if (code !== ERR_NOT_ENOUGH_RESOURCES) {
       console.log(`got bad code ${code}`);

@@ -124,7 +124,11 @@ export class Harvester {
 
       const source = this.creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE, {
         filter: o => {
-          if (this.sourceBelongsToMine(o.id) && this.getMineBySource(o.id)?.getContainer()) {
+          if (
+            this.sourceBelongsToMine(o.id) &&
+            this.getMineBySource(o.id)?.getContainer() &&
+            this.getMineBySource(o.id)?.isMinerAlive()
+          ) {
             return false;
           }
           if (o.energy === 0) return false;

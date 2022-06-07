@@ -16,52 +16,32 @@ export function shouldSpawnMoreHarvesters(creeps: Creep[], mines: Mine[]): boole
   return harvesters.length < 8 + additional;
 }
 
-export function spawnHarvester(room: Room, spawn: StructureSpawn): undefined {
+export function spawnHarvester(
+  room: Room,
+  spawn: StructureSpawn,
+  creeps: Creep[],
+  creepSpawning: CreepSpawning
+): undefined {
   if (spawn.spawning) {
-    console.log("spawning");
+    // console.log("spawning");
     return;
   }
 
-  const maxMoney = getExtensionsCount(room) * 50 + 300;
-
-  let moveParts = 0;
-  let workParts = 0;
-  let carryParts = 0;
-  let cost;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const intermediateCost =
-      (moveParts + 2) * BODYPART_COST[MOVE] +
-      (workParts + 1) * BODYPART_COST[WORK] +
-      (carryParts + 1) * BODYPART_COST[CARRY];
-    if (intermediateCost <= maxMoney && moveParts <= 8) {
-      cost = intermediateCost;
-      moveParts += 2;
-      workParts += 1;
-      carryParts += 1;
-      continue;
-    }
-    break;
+  let bodyParts = [WORK, CARRY, MOVE, MOVE];
+  if (getExtensionsCount(room) >= 5) {
+    bodyParts = [CARRY, CARRY, WORK, WORK, MOVE, MOVE, MOVE, MOVE];
+  }
+  if (creeps.filter(c => c.memory.role === ROLE_HARVESTER).length === 0) {
+    bodyParts = [WORK, CARRY, MOVE, MOVE];
   }
 
-  if (!cost) {
-    throw Error("satisfying typescript");
-  }
-
-  const bodyParts = [
-    ...Array.from({ length: carryParts }).map(() => CARRY),
-    ...Array.from({ length: workParts }).map(() => WORK),
-    ...Array.from({ length: moveParts }).map(() => MOVE)
-  ];
-
-  const code = spawn.spawnCreep(bodyParts, getUniqueCreepName(Object.values(Game.creeps), "harvester"), {
-    memory: {
-      role: ROLE_HARVESTER
-    },
-    energyStructures: closestToSpawnExtensions(spawn, cost) ?? undefined
+  const code = creepSpawning.spawnCreep(spawn, bodyParts, getUniqueCreepName(Object.values(Game.creeps), "harvester"), {
+    role: ROLE_HARVESTER
   });
+  if (code === null) return; // already queued
   if (code !== OK) {
-    // console.log(`error spawning creep (${bodyParts}, cost: ${cost}): ${code}`);
+    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+    console.log(`error spawning harvester (${bodyParts}): ${code}`);
   }
   return;
 }
@@ -152,7 +132,7 @@ export function isInRangeOfEnemy(pos: RoomPosition): boolean {
   return false;
 }
 
-export function smallAttack(spawn: StructureSpawn, creeps: Creep[]) {
+export function smallAttack(spawn: StructureSpawn, creeps: Creep[], creepSpawning: CreepSpawning) {
   const attackers = [];
   for (const creep of creeps) {
     if (creep.memory.role === SMALL_ATTACKER) attackers.push(creep);
@@ -169,11 +149,8 @@ export function smallAttack(spawn: StructureSpawn, creeps: Creep[]) {
     // }
     console.log(
       "spawn attacker",
-      spawn.spawnCreep(b, getUniqueCreepName(creeps, "juicer"), {
-        memory: {
-          role: SMALL_ATTACKER
-        },
-        energyStructures: closestToSpawnExtensions(spawn, creepPrice(b)) ?? undefined
+      creepSpawning.spawnCreep(spawn, b, getUniqueCreepName(creeps, "juicer"), {
+        role: SMALL_ATTACKER
       })
     );
   } else {
@@ -356,18 +333,15 @@ export function placeExtensionsV2(room: Room) {
 }
 
 // moves a 1 MOVE creep to a room so that I have visibility of it
-export function discover(targetRooms: string[], spawn: StructureSpawn, creeps: Creep[]) {
+export function discover(targetRooms: string[], spawn: StructureSpawn, creeps: Creep[], creepSpawning: CreepSpawning) {
   for (const room of targetRooms) {
     const creep = creeps.find(c => c.memory.discovererTargetRoom === room);
     if (!creep) {
       if (spawn.spawning) return;
       const parts = [MOVE];
-      spawn.spawnCreep(parts, getUniqueCreepName(creeps, "sussy-baka"), {
-        memory: {
-          role: ROLE_DISCOVERER,
-          discovererTargetRoom: room
-        },
-        energyStructures: closestToSpawnExtensions(spawn, creepPrice(parts)) ?? undefined
+      creepSpawning.spawnCreep(spawn, parts, getUniqueCreepName(creeps, "sussy-baka"), {
+        role: ROLE_DISCOVERER,
+        discovererTargetRoom: room
       });
       continue;
     }
@@ -410,6 +384,78 @@ export function closestToSpawnExtensions(spawn: StructureSpawn, cost: number): S
     targets.push(ext);
   }
 
-  console.log(`closestExtensionsToSpawn: not enough? bug?`);
-  return null;
+  // console.log(`closestExtensionsToSpawn: not enough to cover cost, returning what we got`);
+  return targets;
+}
+
+export class CreepSpawning {
+  private queuedSpawn = false;
+
+  public spawnCreep(
+    spawn: StructureSpawn,
+    parts: BodyPartConstant[],
+    name: string,
+    memory?: CreepMemory
+  ): ScreepsReturnCode | null {
+    if (this.queuedSpawn || spawn.spawning) return null;
+
+    const opts: SpawnOptions = {
+      energyStructures: closestToSpawnExtensions(spawn, creepPrice(parts)) ?? undefined
+    };
+    if (memory) opts.memory = memory;
+
+    const c = spawn.spawnCreep(parts, name, opts);
+    if (c === OK) {
+      console.log(`spawnCreep(): queued spawn '${name}'`);
+      this.queuedSpawn = true;
+      return null;
+    }
+
+    return c;
+  }
+}
+
+export function placeStorage(rcl: number, spawn: StructureSpawn) {
+  if (rcl < 4) return;
+  if (spawn.room.storage) return;
+
+  if (
+    spawn.room.find(FIND_MY_STRUCTURES, {
+      filter: o => o.structureType === "storage"
+    }).length > 0
+  )
+    return;
+  if (
+    spawn.room.find(FIND_MY_CONSTRUCTION_SITES, {
+      filter: o => o.structureType === "storage"
+    }).length > 0
+  )
+    return;
+
+  const c = spawn.room.createConstructionSite(spawn.pos.x - 1, spawn.pos.y - 1, STRUCTURE_STORAGE);
+  if (c !== OK) console.log(`error placing storage`);
+}
+
+export function placeTower(rcl: number, spawn: StructureSpawn) {
+  if (rcl < 3) return;
+  let allowedTowers = 1;
+  if (rcl > 4) allowedTowers += 1;
+  if (rcl > 6) allowedTowers += 1;
+  if (rcl === 8) allowedTowers += 3;
+
+  if (
+    spawn.room.find(FIND_MY_STRUCTURES, {
+      filter: o => o.structureType === "tower"
+    }).length > allowedTowers
+  )
+    return;
+  if (
+    spawn.room.find(FIND_MY_CONSTRUCTION_SITES, {
+      filter: o => o.structureType === "tower"
+    }).length > 0
+  )
+    return;
+
+  const c = spawn.room.createConstructionSite(spawn.pos.x + 1, spawn.pos.y + 1, STRUCTURE_TOWER);
+  if (c !== OK) console.log(`error placing tower`);
 }

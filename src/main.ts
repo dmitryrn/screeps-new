@@ -1,7 +1,10 @@
 import { ErrorMapper } from "./utils/ErrorMapper";
 import {
+  CreepSpawning,
   discover,
   placeExtensionsV2,
+  placeStorage,
+  placeTower,
   shouldBeUpgradingController,
   shouldSpawnMoreHarvesters,
   smallAttack,
@@ -10,6 +13,7 @@ import {
 import { Harvester } from "./harvester-creep";
 import { handleRepairs } from "./repairer";
 import { RoomMining } from "./room-mining";
+import { seed } from "./utils";
 
 export const ROLE_HARVESTER = "ROLE_HARVESTER";
 export const ROLE_REPAIRER = "ROLE_REPAIRER";
@@ -82,6 +86,8 @@ export const loop = ErrorMapper.wrapLoop(() => {
     }
   }
 
+  seed(10);
+
   try {
     if (!Memory.markedObjects) Memory.markedObjects = {};
     for (const [k, v] of Object.entries(Memory.markedObjects)) {
@@ -119,6 +125,13 @@ export const loop = ErrorMapper.wrapLoop(() => {
     if (!homeRoom) {
       throw Error("didn't find room in main");
     }
+
+    if (!homeRoom.controller) {
+      Game.notify("no controller found in home room, FIX this");
+      return;
+    }
+    const homeRCL = homeRoom.controller.level;
+
     // if (room.name !== "E35N17" && room.name !== "sim") {
     //   throw Error(`got weird room name ${room.name}`);
     // }
@@ -131,16 +144,28 @@ export const loop = ErrorMapper.wrapLoop(() => {
 
     const creeps = Object.values(Game.creeps);
 
-    const mining = new RoomMining(homeRoom, [homeRoom.name, "E35N18"], spawn, creeps);
+    const creepSpawning = new CreepSpawning();
+
+    const mining = new RoomMining(homeRoom, [homeRoom.name, "E35N18"], spawn, creeps, creepSpawning);
     mining.process();
 
-    handleRepairs(homeRoom, spawn, creeps);
+    // handleRepairs(homeRoom, spawn, creeps, creepSpawning);
 
     if ((Game.time + getNextOffset()) % 10 === 0) {
       if (shouldSpawnMoreHarvesters(creeps, mining.getMines())) {
-        spawnHarvester(homeRoom, spawn);
+        spawnHarvester(homeRoom, spawn, creeps, creepSpawning);
       }
     }
+
+    if ((Game.time + getNextOffset()) % 10 === 0) {
+      console.log("trying to place extensions");
+      // placeExtensions(room, spawn);
+      placeExtensionsV2(homeRoom);
+    }
+
+    smallAttack(spawn, creeps, creepSpawning);
+
+    discover(["E35N18"], spawn, creeps, creepSpawning);
 
     for (const creep of creeps) {
       if (creep.memory.role === ROLE_HARVESTER) {
@@ -157,14 +182,12 @@ export const loop = ErrorMapper.wrapLoop(() => {
     }
 
     if ((Game.time + getNextOffset()) % 10 === 0) {
-      console.log("trying to place extensions");
-      // placeExtensions(room, spawn);
-      placeExtensionsV2(homeRoom);
+      placeStorage(homeRCL, spawn);
     }
 
-    smallAttack(spawn, creeps);
-
-    discover(["E35N18"], spawn, creeps);
+    if ((Game.time + getNextOffset()) % 10 === 0) {
+      placeTower(homeRCL, spawn);
+    }
   } catch (e) {
     console.log("caught something in main", e);
   }
